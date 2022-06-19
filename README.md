@@ -18,11 +18,11 @@ I18nResourceTranslator -f zh-CN -t en -sp ./cn.json
 cn.json file like this
 ```json
 {
-    "bind_account": {
-        "bind_account": "绑定账号",
-        "Account": "账号",
-        "account_tip": "请输入"
-    }
+  "bind_account": {
+    "bind_account": "绑定账号 {bind-1} {test_12} {test_+123}",
+    "Account": "{account}账号",
+    "account_tip": "请输入{name}"
+  }
 }
 ```
 and result like this
