@@ -1,5 +1,5 @@
 # I18nResourceTranslator
-translation for vue project using vue-i18n,.json files translation are also supported.为VUE项目使用vue-i18n国际化多语言文件支持翻译功能，JSON文件也支持翻译。
+translation for vue project using vue-i18n,.json files translation are also supported.PHP array resource files are supported. 为VUE项目使用vue-i18n国际化多语言文件支持翻译功能，JSON文件也支持翻译。
 <br>
 using google translator free API,thanks google.
 <br>
@@ -49,6 +49,7 @@ Options:
 -f, --from <from> (REQUIRED)                 谷歌语言编码，指定输入文件的语言
 -t, --to <to> (REQUIRED)                     谷歌语言编码，要翻译的目标语言
 -sp, --source-path <source-path> (REQUIRED)  源文件路径
+-e                                           指定该标志，结果将转义Unicode字符，否则不转义，此标志对PHP文件无效
 --version                                    Show version information
 -?, -h, --help                               Show help and usage information
 
