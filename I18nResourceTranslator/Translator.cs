@@ -6,38 +6,43 @@ using System.Web;
 
 namespace I18nResourceTranslator;
 
-public class Translator
+public abstract class Translator
 {
-    private readonly string from;
-    private readonly string to;
-    private List<Task> editTasks = new();
-    private IDictionary<string, string> translatorCache = new ConcurrentDictionary<string, string>();
-    private readonly string cachePath;
-    private static readonly Regex tokensRegex = new Regex(@"\{[\w\-_\+\d]+\}");
+    /// <summary>
+    /// 源文件内容
+    /// </summary>
+    public string Content { get; }
+    private readonly string _from;
+    private readonly string _to;
+    protected readonly List<Task> EditTasks = new();
+    private IDictionary<string, string> _translatorCache = new ConcurrentDictionary<string, string>();
+    private readonly string _cachePath;
+    private static readonly Regex TokensRegex = new(@"\{[\w\-_\+\d]+\}");
 
-    public Translator(string from, string to)
+    protected Translator(string from, string to, string content)
     {
-        this.from = from;
-        this.to = to;
-        cachePath = $"./translated_{from}_{to}.json";
+        Content = content;
+        _from = from;
+        _to = to;
+        _cachePath = $"./translated_{from}_{to}.json";
     }
 
-    public async Task StartEditJsonAndTranslation(JsonNode doc)
+    protected virtual async Task StartEditAndTranslation()
     {
-        if (File.Exists(cachePath))
+        if (File.Exists(_cachePath))
         {
             Console.WriteLine("加载已翻译的缓存内容...");
-            var cachedJson = await File.ReadAllTextAsync(cachePath);
-            translatorCache = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(cachedJson) ??
-                              translatorCache;
+            var cachedJson = await File.ReadAllTextAsync(_cachePath);
+            _translatorCache = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(cachedJson) ??
+                              _translatorCache;
             Console.WriteLine("已翻译缓存已加载");
         }
 
         try
         {
-            await EditJson(doc);
-            Task.WaitAll(editTasks.ToArray());
-            var failedTasks = editTasks.Where(task => task.IsFaulted).ToArray();
+            await DoEditAndTranslation();
+            Task.WaitAll(EditTasks.ToArray());
+            var failedTasks = EditTasks.Where(task => task.IsFaulted).ToArray();
             foreach (var task in failedTasks)
             {
                 Console.WriteLine("重试翻译任务: {0}", task.Id);
@@ -53,45 +58,35 @@ public class Translator
         }
 
         Console.WriteLine("翻译已完成");
-        await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(translatorCache));
+        await File.WriteAllTextAsync(_cachePath, JsonSerializer.Serialize(_translatorCache));
         Console.WriteLine("翻译缓存已保存");
     }
 
-    private async Task EditJson(JsonNode doc)
-    {
-        var json = doc.AsObject();
-        var dic = new Dictionary<string, JsonNode>();
-        foreach (var pro in json)
-        {
-            switch (pro.Value)
-            {
-                case null:
-                    continue;
-                case JsonObject or JsonArray:
-                    editTasks.Add(EditJson(pro.Value));
-                    break;
-                case JsonValue value:
-                    dic.Add(pro.Key, JsonValue.Create(await Translate(value.GetValue<string>()))!);
-                    break;
-            }
-        }
+    protected abstract Task DoEditAndTranslation();
 
-        foreach (var node in dic)
-        {
-            json[node.Key] = node.Value;
-        }
+    /// <summary>
+    /// 开始翻译并获取整个文件的翻译结果
+    /// </summary>
+    /// <param name="encode">是否转义Unicode字符</param>
+    /// <returns></returns>
+    public async Task<string> GetResult(bool encode)
+    {
+        await StartEditAndTranslation();
+        return await GetStringResult(encode);
     }
 
-    private async Task<string> Translate(string toTrans)
+    protected abstract Task<string> GetStringResult(bool encode);
+
+    protected async Task<string> Translate(string toTrans)
     {
-        if (translatorCache.ContainsKey(toTrans))
+        if (_translatorCache.ContainsKey(toTrans))
         {
-            return translatorCache[toTrans];
+            return _translatorCache[toTrans];
         }
 
         var httpClient = new HttpClient();
         var url =
-            $"http://translate.google.cn/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl={from}&tl={to}&q={HttpUtility.UrlEncode(toTrans)}";
+            $"https://translate.google.com/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl={_from}&tl={_to}&q={HttpUtility.UrlEncode(toTrans)}";
         var json = await httpClient.GetStringAsync(url);
         //{
         // "sentences":[
@@ -113,8 +108,8 @@ public class Translator
         var jsonObj = JsonNode.Parse(json);
         var tran = jsonObj!["sentences"]!.AsArray().Select(node => node!["trans"]!.GetValue<string>())
             .Aggregate((s, s1) => s + s1);
-        var toTransTokens = tokensRegex.Matches(toTrans);
-        var tranTokens = tokensRegex.Matches(tran);
+        var toTransTokens = TokensRegex.Matches(toTrans);
+        var tranTokens = TokensRegex.Matches(tran);
         if (toTransTokens.Count != tranTokens.Count)
         {
             var bgC = Console.BackgroundColor;
@@ -141,7 +136,7 @@ public class Translator
             }
         }
 
-        translatorCache[toTrans] = tran;
+        _translatorCache[toTrans] = tran;
         Console.WriteLine("已翻译：");
         Console.WriteLine($"\t{url}");
         Console.WriteLine($"\t{toTrans}");

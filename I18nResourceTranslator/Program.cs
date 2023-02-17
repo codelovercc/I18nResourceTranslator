@@ -1,8 +1,6 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.CommandLine;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace I18nResourceTranslator;
 
@@ -10,18 +8,21 @@ public static class Program
 {
     public static int Main(string[] args)
     {
-        var fromOption = new Option<string>(new[] {"--from", "-f"}, "谷歌语言编码，指定输入文件的语言")
+        var fromOption = new Option<string>(new[] { "--from", "-f" }, "谷歌语言编码，指定输入文件的语言")
         {
             IsRequired = true
         };
-        var toOption = new Option<string>(new[] {"--to", "-t"}, "谷歌语言编码，要翻译的目标语言")
+        var toOption = new Option<string>(new[] { "--to", "-t" }, "谷歌语言编码，要翻译的目标语言")
         {
             IsRequired = true
         };
-        var sourceOption = new Option<string>(new[] {"--source-path", "-sp"}, "源文件路径")
+        var sourceOption = new Option<string>(new[] { "--source-path", "-sp" }, "源文件路径")
         {
             IsRequired = true,
         };
+
+        var encoderOption = new Option<bool>(new[] { "-e" }, "指定该标志，结果将转义Unicode字符，否则不转义，此标志对PHP文件无效");
+
         sourceOption.AddValidator(result =>
         {
             if (!File.Exists(result.GetValueForOption(sourceOption)))
@@ -33,7 +34,8 @@ public static class Program
         {
             fromOption,
             toOption,
-            sourceOption
+            sourceOption,
+            encoderOption
         };
         rootCommand.SetHandler(async (context) =>
         {
@@ -49,16 +51,26 @@ public static class Program
                 context.ExitCode = -1;
                 return;
             }
+
+            var fileInfo = new FileInfo(source);
+            var ext = fileInfo.Extension;
             Console.WriteLine("正在翻译...");
-            var jsonNode = JsonNode.Parse(content)!;
-            var translator = new Translator(from, to);
-            await translator.StartEditJsonAndTranslation(jsonNode);
-            await File.WriteAllTextAsync($"./{to}.json", jsonNode.ToJsonString(new JsonSerializerOptions(){WriteIndented = true}));
-            Console.WriteLine($"翻译完成，结果已经保存到：{Path.GetFullPath($"./{to}.json")}");
+            var translator = CreateTranslator(from, to, content, ext);
+            var rePath = $"./{fileInfo.Name}.{to}{ext}";
+            await File.WriteAllTextAsync(rePath,
+                await translator.GetResult(context.ParseResult.GetValueForOption(encoderOption)));
+            Console.WriteLine($"翻译完成，结果已经保存到：{Path.GetFullPath(rePath)}");
             context.ExitCode = 0;
         });
-        return  rootCommand.InvokeAsync(args).Result;
+        return rootCommand.InvokeAsync(args).Result;
     }
 
-    
+    private static Translator CreateTranslator(string from, string to, string content, string ext)
+    {
+        return ext switch
+        {
+            ".php" => new PhpTranslator(from, to, content),
+            _ => new JsonTranslator(from, to, content) //默认为Json格式
+        };
+    }
 }
