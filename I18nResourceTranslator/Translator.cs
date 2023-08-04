@@ -11,7 +11,7 @@ public abstract class Translator
     /// <summary>
     /// 源文件内容
     /// </summary>
-    public string Content { get; }
+    protected string Content { get; }
     private readonly string _from;
     private readonly string _to;
     protected readonly List<Task> EditTasks = new();
@@ -75,13 +75,18 @@ public abstract class Translator
         return await GetStringResult(encode);
     }
 
+    /// <summary>
+    /// 获取对<see cref="Content"/>的翻译结果
+    /// </summary>
+    /// <param name="encode"></param>
+    /// <returns></returns>
     protected abstract Task<string> GetStringResult(bool encode);
 
     protected async Task<string> Translate(string toTrans)
     {
-        if (_translatorCache.ContainsKey(toTrans))
+        if (_translatorCache.TryGetValue(toTrans, out var translate))
         {
-            return _translatorCache[toTrans];
+            return translate;
         }
 
         var httpClient = new HttpClient();
