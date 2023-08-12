@@ -17,7 +17,7 @@ public abstract class Translator
     protected readonly List<Task> EditTasks = new();
     private IDictionary<string, string> _translatorCache = new ConcurrentDictionary<string, string>();
     private readonly string _cachePath;
-    private static readonly Regex TokensRegex = new(@"\{[\w\-_\+\d]+\}");
+    private static readonly Regex TokensRegex = new(@"\{[\w\-_+]+\}");
 
     protected Translator(string from, string to, string content)
     {
@@ -32,8 +32,8 @@ public abstract class Translator
         if (File.Exists(_cachePath))
         {
             Console.WriteLine("加载已翻译的缓存内容...");
-            var cachedJson = await File.ReadAllTextAsync(_cachePath);
-            _translatorCache = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(cachedJson) ??
+            await using var reader = File.OpenRead(_cachePath);
+            _translatorCache = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(reader) ??
                               _translatorCache;
             Console.WriteLine("已翻译缓存已加载");
         }
@@ -58,7 +58,8 @@ public abstract class Translator
         }
 
         Console.WriteLine("翻译已完成");
-        await File.WriteAllTextAsync(_cachePath, JsonSerializer.Serialize(_translatorCache));
+        await using var writer = File.OpenWrite(_cachePath);
+        await JsonSerializer.SerializeAsync(writer, _translatorCache);
         Console.WriteLine("翻译缓存已保存");
     }
 
